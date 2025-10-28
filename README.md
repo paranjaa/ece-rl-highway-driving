@@ -1,2 +1,2 @@
-# ece-1508-rl-course-project
+# ece-1508-rl-highway-driving
 Repository for the Reinforcement Learning Course Project 
