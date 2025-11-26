@@ -63,7 +63,7 @@ def run(config, filename, train=True, train_duration=50000):
         trained_model = model.load(filepath)
 
         print("Testing model")
-        state, _ = env.reset(seed=1508)
+        state, _ = env.reset(seed=200)
 
         ended = False
         truncated = False
@@ -90,9 +90,19 @@ if __name__ == "__main__":
         KINEMATICS = "Kinematics"
         LIDAR = "LidarObservation"
 
+    class ActionTypes(Enum):
+        DISCRETE = "DiscreteAction"
+        DISCRETE_META = "DiscreteMetaAction"
+
     filenames = {
-        ObservationTypes.KINEMATICS: "act_DMA__obs_K",
-        ObservationTypes.LIDAR: "act_DMA__obs_LDR",
+        ObservationTypes.KINEMATICS: {
+            ActionTypes.DISCRETE: "act_D__obs_K",
+            ActionTypes.DISCRETE_META: "act_DMA__obs_K",
+        },
+        ObservationTypes.LIDAR: {
+            ActionTypes.DISCRETE: "act_D__obs_LDR",
+            ActionTypes.DISCRETE_META: "act_DMA__obs_LDR",
+        },
     }
 
     observation_config = {
@@ -120,6 +130,24 @@ if __name__ == "__main__":
 
     }
 
+    action_config = {
+        ActionTypes.DISCRETE: {
+            "action": {
+                "type": "DiscreteAction",
+                "longitudinal": True,
+                "lateral": True,
+                "actions_per_axis": 10,          # 10 accel bins x 10 steering bins = 100 actions
+                "acceleration_range": [-3.0, 3.0],   # m/s^2
+                "steering_range":     [-0.3, 0.3],   # rad
+            }
+        },
+        ActionTypes.DISCRETE_META: {
+            "action": {
+                "type": "DiscreteMetaAction",
+            }
+        }
+    }
+
     config = {
         "policy_frequency": 5,
         "lanes_count": 5,
@@ -131,18 +159,19 @@ if __name__ == "__main__":
         "high_speed_reward": 0.7,
         #"right_lane_reward": 0.1,
         "lane_change_reward": -0.1,
-        "action": {
-            "type": "DiscreteMetaAction",
-        },
     }
 
     ############ PARAMETERS ############
     observation_type = ObservationTypes.KINEMATICS
+    action_type = ActionTypes.DISCRETE
     train = True
     train_duration = 100000
     ############ ========== ############
 
     config.update(observation_config[observation_type])
-    filename = filenames[observation_type]
+    config.update(action_config[action_type])
+    filename = filenames[observation_type][action_type]
+
+    print(f"Running with config {config}")
 
     run(config, filename=filename, train=train, train_duration=train_duration)
