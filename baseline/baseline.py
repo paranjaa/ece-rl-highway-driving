@@ -7,9 +7,14 @@ import highway_env
 # 1. Environment constructor
 # ---------------------------
 
-def make_highway_env():
+def make_highway_env(render_mode=None):
     """
     Create and configure a highway-v0 environment suitable for rule-based and RL agents.
+
+    Parameters
+    ----------
+    render_mode : str or None
+        Render mode for the environment. Use "human" for visual playback.
 
     Returns
     -------
@@ -32,18 +37,18 @@ def make_highway_env():
             # 3: "FASTER", 4: "SLOWER"
         },
         "lanes_count": 4,
-        "vehicles_density": 1.0,
+        "vehicles_density": 2.0,
         "duration": 40,                 # seconds
         "simulation_frequency": 15,     # Hz
-        "policy_frequency": 5,          # Hz
-        "collision_reward": -1.0,
+        "policy_frequency": 3,          # Hz
+        "collision_reward": -15.0,
         "high_speed_reward": 0.5,
         "right_lane_reward": 0.1,
         "lane_change_reward": 0.0,      # do not penalize lane change in env; we handle safety in rules
     }
 
     # Pass the config dictionary directly as a keyword argument to gym.make
-    env = gym.make("highway-v0", render_mode=None, config=config)
+    env = gym.make("highway-v0", render_mode=render_mode, config=config)
     return env
 
 
@@ -74,10 +79,12 @@ class RuleBasedAgent:
 
     def __init__(
         self,
-        target_speed: float = 30.0,
+        target_speed: float = 20.0,
         min_headway: float = 15.0,
-        lane_change_gap: float = 12.0,
+        lane_change_gap: float = 4.0,
         speed_margin: float = 1.0,
+        lanes_count: int = 4,
+        lane_width: float = 4.0,
     ):
         """
         Parameters
@@ -98,6 +105,15 @@ class RuleBasedAgent:
         self.min_headway = min_headway
         self.lane_change_gap = lane_change_gap
         self.speed_margin = speed_margin
+        self.lanes_count = lanes_count
+        self.lane_width = lane_width
+        half_span = lane_width * (lanes_count - 1) / 2
+        self.lane_centers = np.linspace(-half_span, half_span, lanes_count)
+
+    def _infer_lane(self, y_pos: float) -> int:
+        """Infer lane index (0 = rightmost lane) from y-position."""
+        idx = int(np.argmin(np.abs(self.lane_centers - y_pos)))
+        return idx
 
     def select_action(self, obs: np.ndarray) -> int:
         """
@@ -122,13 +138,8 @@ class RuleBasedAgent:
         ego_x, ego_y, ego_vx, ego_vy = ego[:4]
         ego_speed = float(np.hypot(ego_vx, ego_vy))
 
-        # Infer ego_lane based on y-coordinate. Assuming lane width of 4m and lanes starting from y=0.
-        # This is a heuristic as 'lane_id' is no longer directly observed.
-        # Default highway-env has lane width 4m and y for lane 0 is typically centered around 0.
-        # This heuristic might need adjustment based on specific environment road configuration.
-        ego_lane = int(np.floor(ego_y / 4.0 + 0.5)) if ego_y >= 0 else int(np.ceil(ego_y / 4.0 - 0.5))
-        # Ensure ego_lane is not negative if the environment setup implies non-negative lane IDs
-        ego_lane = max(0, ego_lane)
+        # Infer ego lane (0 = rightmost lane)
+        ego_lane = self._infer_lane(ego_y)
 
         # For other vehicles, we assume their lane_id can be similarly inferred or is not critical for direct comparison in this part.
         # However, for `same_lane_mask` and `lane_is_safe`, we need `lane_id` for other vehicles too.
@@ -157,12 +168,12 @@ class RuleBasedAgent:
         # Infer lane_ids for other vehicles
         for i in range(1, obs.shape[0]):
             other_y = obs[i, 1]
-            obs_with_lane[i, 4] = int(np.floor(other_y / 4.0 + 0.5)) if other_y >= 0 else int(np.ceil(other_y / 4.0 - 0.5))
-            obs_with_lane[i, 4] = max(0, obs_with_lane[i, 4]) # Ensure non-negative
+            obs_with_lane[i, 4] = self._infer_lane(other_y)
         
         # Reassign ego and others based on the new observation structure with inferred lane_id
         ego = obs_with_lane[0]
         others = obs_with_lane[1:]
+        print(f"[RuleBasedAgent] Ego lane index: {int(ego_lane)}")
 
         # Now ego_lane is available and others[:, 4] also contains inferred lane_id
         # ego_x, ego_y, ego_vx, ego_vy, ego_lane = ego # No longer needed, ego_lane is separately inferred
@@ -255,10 +266,12 @@ class RuleBasedAgent:
 
             # Try changing to the left lane if it exists and is safe
             if left_lane <= max_lane and lane_is_safe(left_lane):
+                print(f"Changing to left lane from {ego_lane} to {left_lane}")
                 return self.ACTION_ID["LEFT"]
 
             # Otherwise, try changing to the right lane if it exists and is safe
             if right_lane >= min_lane and lane_is_safe(right_lane):
+                print(f"Changing to right lane from {ego_lane} to {right_lane}")
                 return self.ACTION_ID["RIGHT"]
 
             # If no lane change is safe, slow down to follow the lead vehicle
@@ -287,7 +300,8 @@ class RuleBasedAgent:
 def evaluate_rule_based_agent(
     env: gym.Env,
     agent: RuleBasedAgent,
-    num_episodes: int = 50,
+    num_episodes: int = 15,
+    render: bool = False,
 ):
     """
     Evaluate the rule-based agent on the given environment.
@@ -305,6 +319,8 @@ def evaluate_rule_based_agent(
         The rule-based agent to evaluate.
     num_episodes : int
         Number of episodes to roll out.
+    render : bool
+        Whether to render episodes visually.
 
     Returns
     -------
@@ -333,7 +349,12 @@ def evaluate_rule_based_agent(
             ego_speed = float(np.hypot(ego_vx, ego_vy))
             speeds.append(ego_speed)
 
+            if render:
+                env.render()
+
         episode_returns.append(episode_return)
+        if render:
+            print(f"Episode {episode + 1}/{num_episodes}: reward = {episode_return:.2f}")
 
         # highway-env uses "crashed" flag in info to signal collision
         if info.get("crashed", False):
@@ -356,15 +377,14 @@ def evaluate_rule_based_agent(
 # ------------------------------------
 
 if __name__ == "__main__":
-    env = make_highway_env()
-    agent = RuleBasedAgent(
-        target_speed=25.0,
-        min_headway=15.0,
-        lane_change_gap=12.0,
-        speed_margin=1.0,
-    )
+    # Create env with rendering enabled
+    env = make_highway_env(render_mode="human")
+    agent = RuleBasedAgent()
 
-    metrics = evaluate_rule_based_agent(env, agent, num_episodes=20)
-    print("Rule-based baseline metrics over 20 episodes:")
+    # Evaluate and render 15 episodes
+    metrics = evaluate_rule_based_agent(env, agent, num_episodes=15, render=True)
+    env.close()
+    
+    print("\nRule-based baseline metrics over 15 episodes:")
     for k, v in metrics.items():
-        print(f"{k}: {v:.4f}")
+        print(f"  {k}: {v:.4f}")
