@@ -14,7 +14,7 @@ from stable_baselines3.common.callbacks import CheckpointCallback
 MODEL_SAVE_PATH = "./models/PPO/{filename}.pth"
 
 def set_up_model(env):
-    batch_size = 64
+    batch_size = 256
     cpu_cores = 8
 
     model = PPO(
@@ -23,12 +23,13 @@ def set_up_model(env):
         policy_kwargs=dict(net_arch=[256, 256]),
         batch_size=batch_size,
         n_steps=batch_size * cpu_cores,
+        n_epochs=5,  # Default 10
         learning_rate=5e-4,
-        gamma=0.8,
+        gamma=0.995,  # Originally 0.8
+        gae_lambda=0.93,  # Default 0.95
         # Potentially different architectures for policy and value networks
         #policy_kwargs=dict(dict(pi=[256, 256], vf=[256, 256])),
         env=env,
-        #device="cpu",
         seed=1508,
         verbose=1,
         tensorboard_log="./tensorboard/PPO/",
@@ -130,7 +131,7 @@ if __name__ == "__main__":
         ObservationTypes.KINEMATICS: {
             "observation": {
                 "type": "Kinematics",
-                "vehicles_count": 10,
+                "vehicles_count": 5,
                 "features": ["presence", "x", "y", "vx", "vy", "cos_h", "sin_h"],
                 "feature_range": {
                     "x": [-100, 100],
@@ -179,19 +180,19 @@ if __name__ == "__main__":
         "vehicles_density": 1.5,
         "initial_spacing": 10,
         "offroad_terminal": True,
-        "collision_reward": -10.0,
+        "collision_reward": -1.0,
         "high_speed_reward": 0.4,
         #"right_lane_reward": 0.1,
         "lane_change_reward": -0.1,
         "reward_speed_range": [15.0, 30.0],  # m/s, for speed normalization
-        "normalize_reward": False,           # keep raw negative rewards
+        "normalize_reward": True,           # keep raw negative rewards
     }
 
     ############ PARAMETERS ############
     observation_type = ObservationTypes.KINEMATICS
     action_type = ActionTypes.DISCRETE_META
     train = True
-    train_duration = 1e7
+    train_duration = 1e6
     ############ ========== ############
 
     config.update(observation_config[observation_type])
@@ -200,4 +201,4 @@ if __name__ == "__main__":
 
     print(f"Running with config {config}")
 
-    run(config, filename=filename + "_trial_1", train=train, train_duration=train_duration)
+    run(config, filename=filename + "_trial_2", train=train, train_duration=train_duration)
