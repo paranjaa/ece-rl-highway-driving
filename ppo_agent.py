@@ -85,7 +85,7 @@ def run(config, filename, train=True, train_duration=50000):
             episode_reward = 0
 
             while not ended and not truncated:
-                action, _ = trained_model.predict(state)
+                action, _ = trained_model.predict(state, deterministic=True)
                 #action = env.action_space.sample()
                 next_state, reward, ended, truncated, _ = env.step(action)
 
@@ -139,7 +139,9 @@ if __name__ == "__main__":
                     "vy": [-20, 20],
                 },
                 "absolute": False,
-                "order": "sorted"
+                "order": "sorted",
+                "normalize": True,
+                "see_behind": True,
             }
         },
         ObservationTypes.LIDAR: {
@@ -170,23 +172,26 @@ if __name__ == "__main__":
     }
 
     config = {
-        "policy_frequency": 5,
+        "policy_frequency": 3,
+        "simulation_frequency": 5,
         "lanes_count": 5,
         "vehicles_count": 50,
-        "vehicles_density": 1.0,
+        "vehicles_density": 1.5,
         "initial_spacing": 10,
         "offroad_terminal": True,
-        "collision_reward": -1.0,
-        "high_speed_reward": 0.7,
+        "collision_reward": -10.0,
+        "high_speed_reward": 0.4,
         #"right_lane_reward": 0.1,
         "lane_change_reward": -0.1,
+        "reward_speed_range": [15.0, 30.0],  # m/s, for speed normalization
+        "normalize_reward": False,           # keep raw negative rewards
     }
 
     ############ PARAMETERS ############
     observation_type = ObservationTypes.KINEMATICS
     action_type = ActionTypes.DISCRETE_META
-    train = False
-    train_duration = 1e6
+    train = True
+    train_duration = 1e7
     ############ ========== ############
 
     config.update(observation_config[observation_type])
@@ -195,4 +200,4 @@ if __name__ == "__main__":
 
     print(f"Running with config {config}")
 
-    run(config, filename=filename, train=train, train_duration=train_duration)
+    run(config, filename=filename + "_trial_1", train=train, train_duration=train_duration)
