@@ -282,10 +282,12 @@ def evaluate_config(model, run_config: Dict, label: str) -> Tuple[float, float, 
     avg_speed = float(np.mean(ep_avg_speeds))
     avg_distance = float(np.mean(ep_distances)) 
     avg_rms_accel = float(np.mean(ep_rms_accels)) 
-    avg_rms_jerk = float(np.mean(ep_rms_jerks)) #adding a counter in for jerk
+    #adding a counter in for jerk
+    avg_rms_jerk = float(np.mean(ep_rms_jerks)) 
     total_actions = action_counts.sum()
     
-    return avg_return, collision_rate, avg_speed, avg_distance, avg_rms_accel, action_counts, total_actions
+    #forgot to pass the counter in for jerk as well
+    return avg_return, collision_rate, avg_speed, avg_distance, avg_rms_accel, avg_rms_jerk, action_counts, total_actions
 
 
 def build_configs(base_cfg: Dict) -> List[Tuple[str, Dict]]:
@@ -358,13 +360,14 @@ if __name__ == "__main__":
     print("Highway DQN Benchmark Summary (50 eps/config, n_env=4)")
     print(f"Model checkpoint: {MODEL_PATH}")
     print("=" * 70)
-    for label, avg_ret, coll_rate, avg_speed, avg_dist, avg_rms_accel, action_counts, total_actions in summary:
+    for label, avg_ret, coll_rate, avg_speed, avg_dist, avg_rms_accel, avg_rms_jerk, action_counts, total_actions in summary:
         print(f"{label}")
         print(f"  Avg Reward     : {avg_ret:8.3f}")
         print(f"  Collision Rate : {coll_rate:8.2f}%")
         print(f"  Avg Speed      : {avg_speed:8.3f} m/s")
         print(f"  Avg Distance   : {avg_dist:8.3f} m") 
         print(f"  RMS Accel      : {avg_rms_accel:8.3f} m/s^2")
+        #aslo 
         print(f"  RMS Jerk      : {avg_rms_jerk:8.3f} m/s^3")
         print(f"  Action distribution (total actions = {total_actions}):")
         for idx, count in enumerate(action_counts):
