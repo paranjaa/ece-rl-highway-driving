@@ -24,6 +24,7 @@ import gymnasium as gym
 import highway_env  # noqa: F401 (register env)
 import numpy as np
 from stable_baselines3 import DQN
+from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import SubprocVecEnv
 
 # Import RuleBasedAgent
@@ -33,8 +34,8 @@ from baseline.baseline import RuleBasedAgent
 # Flags
 # ─────────────────────────────────────────────────────────────
 IS_BASELINE = False   # Set to True to test RuleBasedAgent
-IS_DQN = True         # Set to True to test DQN
-IS_PPO = False        # Placeholder for future PPO implementation
+IS_DQN = False         # Set to True to test DQN
+IS_PPO = True        # Placeholder for future PPO implementation (hopefully not anymore)
 
 # Ensure only one flag is active 
 if sum([IS_BASELINE, IS_DQN, IS_PPO]) != 1:
@@ -44,9 +45,22 @@ if sum([IS_BASELINE, IS_DQN, IS_PPO]) != 1:
 # Paths / constants
 # ─────────────────────────────────────────────────────────────
 BASE_CONFIG_PATH = "config.json"
-MODEL_DIR = "highway_second_try"
-CHECKPOINT_STEPS = 10_000_000
-MODEL_PATH = os.path.join(MODEL_DIR, f"checkpoints/dqn_model_{CHECKPOINT_STEPS}_steps")
+
+
+
+MODEL_DIR = "ppo_10M_new_run"
+# CHECKPOINT_STEPS = 10_000_000
+#the new model trained with odd number of steps
+CHECKPOINT_STEPS = 9999000
+
+if IS_DQN:
+    MODEL_PATH = os.path.join(MODEL_DIR, f"checkpoints/dqn_model_{CHECKPOINT_STEPS}_steps")
+elif IS_PPO:
+    MODEL_PATH = os.path.join(MODEL_DIR, f"checkpoints/ppo_model_{CHECKPOINT_STEPS}_steps")
+
+
+
+
 
 N_ENVS = 4
 EPISODES_PER_CONFIG = 50
@@ -161,12 +175,13 @@ def evaluate_config(model, run_config: Dict, label: str) -> Tuple[float, float, 
             actions = np.array(actions)
         
         elif IS_DQN:
+            print ("Loading DQN Model")
             actions, _ = model.predict(obs, deterministic=True)
             
         elif IS_PPO:
             # Placeholder for PPO
-            # actions, _ = model.predict(obs, deterministic=True)
-            pass
+            # print ("Loading PPO Model")
+            actions, _ = model.predict(obs, deterministic=True)
 
         else:
             # Default fallback if flags are messy
@@ -344,9 +359,11 @@ if __name__ == "__main__":
         model = DQN.load(MODEL_PATH, device="cuda")
 
     elif IS_PPO:
-        print("Model: PPO (Not implemented yet)")
+        print(f"Model: PPO (loading from {MODEL_PATH})")
         # model = PPO.load(...)
-        exit()
+        if not os.path.exists(MODEL_PATH + ".zip") and not os.path.exists(MODEL_PATH):
+            raise FileNotFoundError(f"Model checkpoint not found at {MODEL_PATH}(.zip)")
+        model = PPO.load(MODEL_PATH, device="cuda")
 
     # ─────────────────────────────────────────────────────────────
     # Run Evaluation
@@ -357,7 +374,7 @@ if __name__ == "__main__":
         summary.append((label, *metrics))
 
     print("=" * 70)
-    print("Highway DQN Benchmark Summary (50 eps/config, n_env=4)")
+    print("Highway Model Benchmark Summary (50 eps/config, n_env=4)")
     print(f"Model checkpoint: {MODEL_PATH}")
     print("=" * 70)
     for label, avg_ret, coll_rate, avg_speed, avg_dist, avg_rms_accel, avg_rms_jerk, action_counts, total_actions in summary:
@@ -367,7 +384,6 @@ if __name__ == "__main__":
         print(f"  Avg Speed      : {avg_speed:8.3f} m/s")
         print(f"  Avg Distance   : {avg_dist:8.3f} m") 
         print(f"  RMS Accel      : {avg_rms_accel:8.3f} m/s^2")
-        #aslo 
         print(f"  RMS Jerk      : {avg_rms_jerk:8.3f} m/s^3")
         print(f"  Action distribution (total actions = {total_actions}):")
         for idx, count in enumerate(action_counts):

@@ -93,7 +93,6 @@ if __name__ == "__main__":
     #start training, same as others
     model.learn(
         total_timesteps=TOTAL_TIMESTEPS,
-        callback=checkpoint_callback,
         log_interval=50,
         callback=[checkpoint_callback, progress_callback],
         reset_num_timesteps=True,
