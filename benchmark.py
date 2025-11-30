@@ -10,7 +10,7 @@ without rendering, and report:
     Collision rate (% of episodes that ended in a crash)
     Average ego speed (m/s) averaged over each episode
     TODO: Minimum TTC (time to collision): The minimum time to collision (in s) to the nearest vehicle assuming all vehicles continue at constant velocity
-     RMS Acceleration : Root Mean Square Acceleration (m/s^2)
+    RMS Acceleration : Root Mean Square Acceleration (m/s^2)
     TODO:RMS Jerk 
 """
 
@@ -119,6 +119,7 @@ def evaluate_config(model, run_config: Dict, label: str) -> Tuple[float, float, 
     ep_collisions: List[bool] = []
     ep_distances: List[float] = []
     ep_rms_accels: List[float] = [] 
+    ep_rms_jerks : List[float] = []
 
     # Initialize env state trackers
     curr_return = np.zeros(N_ENVS, dtype=np.float32)
@@ -132,6 +133,16 @@ def evaluate_config(model, run_config: Dict, label: str) -> Tuple[float, float, 
     curr_accel_steps = np.zeros(N_ENVS, dtype=np.int32)    # Count of accel steps
     prev_speeds = np.zeros(N_ENVS, dtype=np.float32)       # To calculate dv
     
+    #set up trackers for calculating jerk (da/dt)
+    # Sum of jerk^2
+    curr_sq_jerk_sum = np.zeros(N_ENVS, dtype=np.float32)  
+    # number of of jerk steps
+    curr_jerk_steps = np.zeros(N_ENVS, dtype=np.int32)     
+    # also prev acceleration
+    prev_accels = np.zeros(N_ENVS, dtype=np.float32)       
+
+
+
     # We need to know if an env just reset to ignore the speed jump from End->Start
     just_reset = np.ones(N_ENVS, dtype=bool) 
 
@@ -190,11 +201,26 @@ def evaluate_config(model, run_config: Dict, label: str) -> Tuple[float, float, 
                 accel = dv / dt
                 curr_sq_accel_sum[idx] += accel ** 2
                 curr_accel_steps[idx] += 1
+
+                #also Jerk Calculation
+                #but only if there are 2 accel values (curr_jerk is 0 initially)
+                if curr_accel_steps[idx] > 1:
+                    #jerk = da/dt = a_t - a_(t-1) / d_t
+                    jerk = (accel - prev_accels[idx]) / dt
+                    curr_sq_jerk_sum[idx] += jerk ** 2
+                    curr_jerk_steps[idx] += 1
+                prev_accels[idx] = accel
+
+
             else:
                 # First step after reset, cannot calculate accel properly
                 just_reset[idx] = False
             
             prev_speeds[idx] = speed # Update for next step
+
+
+
+            
 
             if isinstance(info, dict) and info.get("crashed", False):
                 curr_collision[idx] = True
@@ -207,12 +233,24 @@ def evaluate_config(model, run_config: Dict, label: str) -> Tuple[float, float, 
                 ep_collisions.append(bool(curr_collision[idx]))
                 ep_distances.append(float(curr_dist_sum[idx]))
                 
-                # RMS Accel
+
                 if curr_accel_steps[idx] > 0:
                     rms = np.sqrt(curr_sq_accel_sum[idx] / curr_accel_steps[idx])
+
                 else:
                     rms = 0.0
+
+                if curr_jerk_steps[idx] > 0:
+                    rms_jerk = np.sqrt(curr_sq_jerk_sum[idx] / curr_jerk_steps[idx])
+                else:
+                    rms_jerk = 0.0
+
+
+
+
                 ep_rms_accels.append(float(rms)) 
+
+                ep_rms_jerks.append(float(rms_jerk))
 
                 # Reset trackers
                 curr_return[idx] = 0.0
@@ -222,6 +260,11 @@ def evaluate_config(model, run_config: Dict, label: str) -> Tuple[float, float, 
                 curr_sq_accel_sum[idx] = 0.0 
                 curr_accel_steps[idx] = 0    
                 curr_collision[idx] = False
+
+                #also reset the ones for jerk
+                curr_sq_jerk_sum[idx] = 0.0
+                curr_jerk_steps[idx] = 0
+                prev_accels[idx] = 0.0
                 
                 just_reset[idx] = True
                 prev_speeds[idx] = 0.0 
@@ -239,6 +282,7 @@ def evaluate_config(model, run_config: Dict, label: str) -> Tuple[float, float, 
     avg_speed = float(np.mean(ep_avg_speeds))
     avg_distance = float(np.mean(ep_distances)) 
     avg_rms_accel = float(np.mean(ep_rms_accels)) 
+    avg_rms_jerk = float(np.mean(ep_rms_jerks)) #adding a counter in for jerk
     total_actions = action_counts.sum()
     
     return avg_return, collision_rate, avg_speed, avg_distance, avg_rms_accel, action_counts, total_actions
@@ -321,6 +365,7 @@ if __name__ == "__main__":
         print(f"  Avg Speed      : {avg_speed:8.3f} m/s")
         print(f"  Avg Distance   : {avg_dist:8.3f} m") 
         print(f"  RMS Accel      : {avg_rms_accel:8.3f} m/s^2")
+        print(f"  RMS Jerk      : {avg_rms_jerk:8.3f} m/s^3")
         print(f"  Action distribution (total actions = {total_actions}):")
         for idx, count in enumerate(action_counts):
             name = ACTION_NAMES.get(idx, f"A{idx}")
