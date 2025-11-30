@@ -173,7 +173,6 @@ class RuleBasedAgent:
         # Reassign ego and others based on the new observation structure with inferred lane_id
         ego = obs_with_lane[0]
         others = obs_with_lane[1:]
-        print(f"[RuleBasedAgent] Ego lane index: {int(ego_lane)}")
 
         # Now ego_lane is available and others[:, 4] also contains inferred lane_id
         # ego_x, ego_y, ego_vx, ego_vy, ego_lane = ego # No longer needed, ego_lane is separately inferred
@@ -266,12 +265,11 @@ class RuleBasedAgent:
 
             # Try changing to the left lane if it exists and is safe
             if left_lane <= max_lane and lane_is_safe(left_lane):
-                print(f"Changing to left lane from {ego_lane} to {left_lane}")
                 return self.ACTION_ID["LEFT"]
 
             # Otherwise, try changing to the right lane if it exists and is safe
             if right_lane >= min_lane and lane_is_safe(right_lane):
-                print(f"Changing to right lane from {ego_lane} to {right_lane}")
+                print("Changing to right lane")
                 return self.ACTION_ID["RIGHT"]
 
             # If no lane change is safe, slow down to follow the lead vehicle

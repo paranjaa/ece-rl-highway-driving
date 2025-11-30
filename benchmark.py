@@ -2,12 +2,16 @@
 benchmark.py
 
 Evaluate the trained SB3 DQN policy across multiple highway-env configs.
-The model is loaded from the 10M-step checkpoint used in playDQN.py.
+The model is loaded from a checkpoint (you have to specify the directory).
 For each config we run 50 evaluation episodes using a 4-env SubprocVecEnv
 without rendering, and report:
-    • Average episode reward
-    • Collision rate (% of episodes that ended in a crash)
-    • Average ego speed (m/s) averaged over each episode
+    Average distance covered over episodes (in m)
+    Average episode reward
+    Collision rate (% of episodes that ended in a crash)
+    Average ego speed (m/s) averaged over each episode
+    TODO: Minimum TTC (time to collision): The minimum time to collision (in s) to the nearest vehicle assuming all vehicles continue at constant velocity
+     RMS Acceleration : Root Mean Square Acceleration (m/s^2)
+    TODO:RMS Jerk 
 """
 
 import copy
@@ -21,6 +25,20 @@ import highway_env  # noqa: F401 (register env)
 import numpy as np
 from stable_baselines3 import DQN
 from stable_baselines3.common.vec_env import SubprocVecEnv
+
+# Import RuleBasedAgent
+from baseline.baseline import RuleBasedAgent
+
+# ─────────────────────────────────────────────────────────────
+# Flags
+# ─────────────────────────────────────────────────────────────
+IS_BASELINE = False   # Set to True to test RuleBasedAgent
+IS_DQN = True         # Set to True to test DQN
+IS_PPO = False        # Placeholder for future PPO implementation
+
+# Ensure only one flag is active 
+if sum([IS_BASELINE, IS_DQN, IS_PPO]) != 1:
+    print("WARNING: More than one model flag (IS_BASELINE, IS_DQN, IS_PPO) is set or none are set.")
 
 # ─────────────────────────────────────────────────────────────
 # Paths / constants
@@ -65,19 +83,25 @@ def make_vec_env(run_config: Dict) -> SubprocVecEnv:
 
 
 def maybe_get_speed(info: Dict, obs_chunk) -> float:
+    """
+    Safely extract ego speed from the info dict (preferred, un-normalized).
+    Fallback to 0.0 if not available.
+    """
     if isinstance(info, dict) and "speed" in info:
         return float(info["speed"])
-    # Fallback: estimate from observation (ego vehicle is first row)
-    if obs_chunk is not None and len(obs_chunk) > 0:
-        ego = obs_chunk[0]
-        if len(ego) >= 4:
-            vx, vy = ego[2], ego[3]
-            return float(np.hypot(vx, vy))
+    
+    # If everything fails, return 0.0
     return 0.0
 
 
-def evaluate_config(model: DQN, run_config: Dict, label: str) -> Tuple[float, float, float, np.ndarray, int]:
+def evaluate_config(model, run_config: Dict, label: str) -> Tuple[float, float, float, float, float, np.ndarray, int]:
     env = make_vec_env(run_config)
+
+    # Determine dt (time step duration)
+    # Default policy_frequency is 1 Hz if not specified.
+    # We should use the same logic dt = 1 / policy_frequency
+    policy_freq = run_config.get("policy_frequency", 1)
+    dt = 1.0 / policy_freq
 
     reset_out = env.reset()
     if isinstance(reset_out, tuple):
@@ -89,19 +113,54 @@ def evaluate_config(model: DQN, run_config: Dict, label: str) -> Tuple[float, fl
     n_actions = int(env.action_space.n)
     action_counts = np.zeros(n_actions, dtype=np.int64)
 
+    # Initialize metric lists
     ep_returns: List[float] = []
     ep_avg_speeds: List[float] = []
     ep_collisions: List[bool] = []
+    ep_distances: List[float] = []
+    ep_rms_accels: List[float] = [] 
 
+    # Initialize env state trackers
     curr_return = np.zeros(N_ENVS, dtype=np.float32)
     curr_steps = np.zeros(N_ENVS, dtype=np.int32)
     curr_speed_sum = np.zeros(N_ENVS, dtype=np.float32)
+    curr_dist_sum = np.zeros(N_ENVS, dtype=np.float32)
     curr_collision = np.zeros(N_ENVS, dtype=bool)
+    
+    # Acceleration trackers
+    curr_sq_accel_sum = np.zeros(N_ENVS, dtype=np.float32) # Sum of accel^2
+    curr_accel_steps = np.zeros(N_ENVS, dtype=np.int32)    # Count of accel steps
+    prev_speeds = np.zeros(N_ENVS, dtype=np.float32)       # To calculate dv
+    
+    # We need to know if an env just reset to ignore the speed jump from End->Start
+    just_reset = np.ones(N_ENVS, dtype=bool) 
 
     completed_eps = 0
 
     while completed_eps < EPISODES_PER_CONFIG:
-        actions, _ = model.predict(obs, deterministic=True)
+        # ─────────────────────────────────────────────────────────────
+        # Model Prediction Logic
+        # ─────────────────────────────────────────────────────────────
+        if IS_BASELINE:
+            # RuleBasedAgent expects single observation, not vectorized
+            actions = []
+            for i in range(N_ENVS):
+                action = model.select_action(obs[i])
+                actions.append(action)
+            actions = np.array(actions)
+        
+        elif IS_DQN:
+            actions, _ = model.predict(obs, deterministic=True)
+            
+        elif IS_PPO:
+            # Placeholder for PPO
+            # actions, _ = model.predict(obs, deterministic=True)
+            pass
+
+        else:
+            # Default fallback if flags are messy
+            actions, _ = model.predict(obs, deterministic=True)
+
         for action in np.asarray(actions).reshape(-1):
             action_counts[int(action)] += 1
         step_out = env.step(actions)
@@ -121,7 +180,22 @@ def evaluate_config(model: DQN, run_config: Dict, label: str) -> Tuple[float, fl
         for idx, info in enumerate(infos):
             ego_obs = next_obs[idx]
             speed = maybe_get_speed(info, ego_obs)
+            
             curr_speed_sum[idx] += speed
+            curr_dist_sum[idx] += speed * dt
+            
+            # Acceleration Calculation
+            if not just_reset[idx]:
+                dv = speed - prev_speeds[idx]
+                accel = dv / dt
+                curr_sq_accel_sum[idx] += accel ** 2
+                curr_accel_steps[idx] += 1
+            else:
+                # First step after reset, cannot calculate accel properly
+                just_reset[idx] = False
+            
+            prev_speeds[idx] = speed # Update for next step
+
             if isinstance(info, dict) and info.get("crashed", False):
                 curr_collision[idx] = True
 
@@ -131,11 +205,26 @@ def evaluate_config(model: DQN, run_config: Dict, label: str) -> Tuple[float, fl
                 ep_returns.append(float(curr_return[idx]))
                 ep_avg_speeds.append(float(avg_speed))
                 ep_collisions.append(bool(curr_collision[idx]))
+                ep_distances.append(float(curr_dist_sum[idx]))
+                
+                # RMS Accel
+                if curr_accel_steps[idx] > 0:
+                    rms = np.sqrt(curr_sq_accel_sum[idx] / curr_accel_steps[idx])
+                else:
+                    rms = 0.0
+                ep_rms_accels.append(float(rms)) 
 
+                # Reset trackers
                 curr_return[idx] = 0.0
                 curr_steps[idx] = 0
                 curr_speed_sum[idx] = 0.0
+                curr_dist_sum[idx] = 0.0
+                curr_sq_accel_sum[idx] = 0.0 
+                curr_accel_steps[idx] = 0    
                 curr_collision[idx] = False
+                
+                just_reset[idx] = True
+                prev_speeds[idx] = 0.0 
 
                 completed_eps += 1
                 if completed_eps >= EPISODES_PER_CONFIG:
@@ -148,8 +237,11 @@ def evaluate_config(model: DQN, run_config: Dict, label: str) -> Tuple[float, fl
     avg_return = float(np.mean(ep_returns))
     collision_rate = float(np.mean(ep_collisions) * 100.0)
     avg_speed = float(np.mean(ep_avg_speeds))
+    avg_distance = float(np.mean(ep_distances)) 
+    avg_rms_accel = float(np.mean(ep_rms_accels)) 
     total_actions = action_counts.sum()
-    return avg_return, collision_rate, avg_speed, action_counts, total_actions
+    
+    return avg_return, collision_rate, avg_speed, avg_distance, avg_rms_accel, action_counts, total_actions
 
 
 def build_configs(base_cfg: Dict) -> List[Tuple[str, Dict]]:
@@ -180,11 +272,39 @@ if __name__ == "__main__":
     base_config = load_base_config()
     configs = build_configs(base_config)
 
-    if not os.path.exists(MODEL_PATH + ".zip") and not os.path.exists(MODEL_PATH):
-        raise FileNotFoundError(f"Model checkpoint not found at {MODEL_PATH}(.zip)")
+    model = None
 
-    model = DQN.load(MODEL_PATH, device="cuda")
+    # ─────────────────────────────────────────────────────────────
+    # Model Loading & Config Adjustments
+    # ─────────────────────────────────────────────────────────────
+    if IS_BASELINE:
+        print("Model: RuleBasedAgent")
+        # Initialize RuleBasedAgent
+        model = RuleBasedAgent(target_speed=23.0) 
+        
+        # RuleBasedAgent requires un-normalized observations (meters)
+        # We must modify the configs to set "normalize": False
+        for _, cfg in configs:
+            if "observation" in cfg:
+                cfg["observation"]["normalize"] = False
+            else:
+                # If observation key is missing (unlikely based on your file), ensure it exists
+                cfg["observation"] = {"normalize": False}
 
+    elif IS_DQN:
+        print(f"Model: DQN (loading from {MODEL_PATH})")
+        if not os.path.exists(MODEL_PATH + ".zip") and not os.path.exists(MODEL_PATH):
+            raise FileNotFoundError(f"Model checkpoint not found at {MODEL_PATH}(.zip)")
+        model = DQN.load(MODEL_PATH, device="cuda")
+
+    elif IS_PPO:
+        print("Model: PPO (Not implemented yet)")
+        # model = PPO.load(...)
+        exit()
+
+    # ─────────────────────────────────────────────────────────────
+    # Run Evaluation
+    # ─────────────────────────────────────────────────────────────
     summary = []
     for label, cfg in configs:
         metrics = evaluate_config(model, cfg, label)
@@ -194,11 +314,13 @@ if __name__ == "__main__":
     print("Highway DQN Benchmark Summary (50 eps/config, n_env=4)")
     print(f"Model checkpoint: {MODEL_PATH}")
     print("=" * 70)
-    for label, avg_ret, coll_rate, avg_speed, action_counts, total_actions in summary:
+    for label, avg_ret, coll_rate, avg_speed, avg_dist, avg_rms_accel, action_counts, total_actions in summary:
         print(f"{label}")
         print(f"  Avg Reward     : {avg_ret:8.3f}")
         print(f"  Collision Rate : {coll_rate:8.2f}%")
         print(f"  Avg Speed      : {avg_speed:8.3f} m/s")
+        print(f"  Avg Distance   : {avg_dist:8.3f} m") 
+        print(f"  RMS Accel      : {avg_rms_accel:8.3f} m/s^2")
         print(f"  Action distribution (total actions = {total_actions}):")
         for idx, count in enumerate(action_counts):
             name = ACTION_NAMES.get(idx, f"A{idx}")
