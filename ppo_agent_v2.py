@@ -25,9 +25,9 @@ def set_up_model(env):
         batch_size=batch_size,
         n_steps=batch_size * cpu_cores,
         n_epochs=5,  # Default 10
-        learning_rate=5e-4,
-        gamma=0.995,  # Originally 0.8
-        gae_lambda=0.93,  # Default 0.95
+        learning_rate=3e-4,
+        gamma=0.8,  # Originally 0.8
+        gae_lambda=0.95,  # Default 0.95
         # Potentially different architectures for policy and value networks
         #policy_kwargs=dict(dict(pi=[256, 256], vf=[256, 256])),
         env=env,
@@ -48,7 +48,7 @@ def run(config, filename, train=True, train_duration=50000):
         model = set_up_model(env)
         callbacks = [
             CheckpointCallback(
-                save_freq=5000,
+                save_freq=10000,
                 save_path="./models/PPO_v2/checkpoints/",
                 name_prefix=filename,
                 save_replay_buffer=True,
@@ -110,9 +110,9 @@ def run(config, filename, train=True, train_duration=50000):
 
 if __name__ == "__main__":
     ############ PARAMETERS ############
-    vehicle_density = 1.5
+    vehicle_density = 2.0
     train = True
-    train_duration = 1e5
+    train_duration = 1e7
     ############ ========== ############
 
     with open("config.json", "r") as fh:
