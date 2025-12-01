@@ -154,7 +154,7 @@ if __name__ == "__main__":
     NUM_EPISODES = 5             # Number of episodes to play
     
     # Model directory (where checkpoints and config.json are stored)
-    MODEL_DIR = "highway_second_try"
+    MODEL_DIR = "models/DQN"
     
     # Environment overrides (set to None to use config defaults)
     VEHICLES_COUNT = 30          # Number of vehicles (None = use config)

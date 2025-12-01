@@ -17,8 +17,9 @@ without rendering, and report:
 import copy
 import json
 import os
-from dataclasses import dataclass
 from typing import Dict, List, Tuple
+
+from enum import Enum
 
 import gymnasium as gym
 import highway_env  # noqa: F401 (register env)
@@ -31,36 +32,17 @@ from stable_baselines3.common.vec_env import SubprocVecEnv
 from baseline.baseline import RuleBasedAgent
 
 # ─────────────────────────────────────────────────────────────
-# Flags
-# ─────────────────────────────────────────────────────────────
-IS_BASELINE = False   # Set to True to test RuleBasedAgent
-IS_DQN = False         # Set to True to test DQN
-IS_PPO = True        # Placeholder for future PPO implementation (hopefully not anymore)
-
-# Ensure only one flag is active 
-if sum([IS_BASELINE, IS_DQN, IS_PPO]) != 1:
-    print("WARNING: More than one model flag (IS_BASELINE, IS_DQN, IS_PPO) is set or none are set.")
-
-# ─────────────────────────────────────────────────────────────
 # Paths / constants
 # ─────────────────────────────────────────────────────────────
 BASE_CONFIG_PATH = "config.json"
 
+BASE_MODEL_PATH = "models/"
 
-
-MODEL_DIR = "ppo_10M_new_run"
-# CHECKPOINT_STEPS = 10_000_000
-#the new model trained with odd number of steps
-CHECKPOINT_STEPS = 9999000
-
-if IS_DQN:
-    MODEL_PATH = os.path.join(MODEL_DIR, f"checkpoints/dqn_model_{CHECKPOINT_STEPS}_steps")
-elif IS_PPO:
-    MODEL_PATH = os.path.join(MODEL_DIR, f"checkpoints/ppo_model_{CHECKPOINT_STEPS}_steps")
-
-
-
-
+class MODEL_TYPE(Enum):
+    BASELINE = "BASELINE"
+    DQN = "DQN"
+    DDQN = "DDQN"
+    PPO = "PPO_v2"
 
 N_ENVS = 4
 EPISODES_PER_CONFIG = 50
@@ -72,7 +54,6 @@ ACTION_NAMES = {
     3: "FASTER",
     4: "SLOWER",
 }
-
 
 # ─────────────────────────────────────────────────────────────
 # Helpers
@@ -166,25 +147,15 @@ def evaluate_config(model, run_config: Dict, label: str) -> Tuple[float, float, 
         # ─────────────────────────────────────────────────────────────
         # Model Prediction Logic
         # ─────────────────────────────────────────────────────────────
-        if IS_BASELINE:
+        if isinstance(model, RuleBasedAgent):
             # RuleBasedAgent expects single observation, not vectorized
             actions = []
             for i in range(N_ENVS):
                 action = model.select_action(obs[i])
                 actions.append(action)
             actions = np.array(actions)
-        
-        elif IS_DQN:
-            print ("Loading DQN Model")
-            actions, _ = model.predict(obs, deterministic=True)
-            
-        elif IS_PPO:
-            # Placeholder for PPO
-            # print ("Loading PPO Model")
-            actions, _ = model.predict(obs, deterministic=True)
 
         else:
-            # Default fallback if flags are messy
             actions, _ = model.predict(obs, deterministic=True)
 
         for action in np.asarray(actions).reshape(-1):
@@ -226,16 +197,11 @@ def evaluate_config(model, run_config: Dict, label: str) -> Tuple[float, float, 
                     curr_jerk_steps[idx] += 1
                 prev_accels[idx] = accel
 
-
             else:
                 # First step after reset, cannot calculate accel properly
                 just_reset[idx] = False
             
             prev_speeds[idx] = speed # Update for next step
-
-
-
-            
 
             if isinstance(info, dict) and info.get("crashed", False):
                 curr_collision[idx] = True
@@ -247,7 +213,6 @@ def evaluate_config(model, run_config: Dict, label: str) -> Tuple[float, float, 
                 ep_avg_speeds.append(float(avg_speed))
                 ep_collisions.append(bool(curr_collision[idx]))
                 ep_distances.append(float(curr_dist_sum[idx]))
-                
 
                 if curr_accel_steps[idx] > 0:
                     rms = np.sqrt(curr_sq_accel_sum[idx] / curr_accel_steps[idx])
@@ -259,9 +224,6 @@ def evaluate_config(model, run_config: Dict, label: str) -> Tuple[float, float, 
                     rms_jerk = np.sqrt(curr_sq_jerk_sum[idx] / curr_jerk_steps[idx])
                 else:
                     rms_jerk = 0.0
-
-
-
 
                 ep_rms_accels.append(float(rms)) 
 
@@ -329,20 +291,12 @@ def build_configs(base_cfg: Dict) -> List[Tuple[str, Dict]]:
     return configs
 
 
-if __name__ == "__main__":
-    base_config = load_base_config()
-    configs = build_configs(base_config)
-
-    model = None
-
-    # ─────────────────────────────────────────────────────────────
-    # Model Loading & Config Adjustments
-    # ─────────────────────────────────────────────────────────────
-    if IS_BASELINE:
+def get_latest_model(model_type, configs, override=None):
+    if model_type == MODEL_TYPE.BASELINE:
         print("Model: RuleBasedAgent")
         # Initialize RuleBasedAgent
-        model = RuleBasedAgent(target_speed=23.0) 
-        
+        model = RuleBasedAgent(target_speed=23.0)
+
         # RuleBasedAgent requires un-normalized observations (meters)
         # We must modify the configs to set "normalize": False
         for _, cfg in configs:
@@ -352,18 +306,68 @@ if __name__ == "__main__":
                 # If observation key is missing (unlikely based on your file), ensure it exists
                 cfg["observation"] = {"normalize": False}
 
-    elif IS_DQN:
-        print(f"Model: DQN (loading from {MODEL_PATH})")
-        if not os.path.exists(MODEL_PATH + ".zip") and not os.path.exists(MODEL_PATH):
-            raise FileNotFoundError(f"Model checkpoint not found at {MODEL_PATH}(.zip)")
-        model = DQN.load(MODEL_PATH, device="cuda")
+    elif model_type == MODEL_TYPE.DQN:
+        model_path = get_model_path(model_type, override)
+        print(f"Model: DQN (loading from {model_path})")
+        model = DQN.load(model_path, device="cuda")
 
-    elif IS_PPO:
-        print(f"Model: PPO (loading from {MODEL_PATH})")
-        # model = PPO.load(...)
-        if not os.path.exists(MODEL_PATH + ".zip") and not os.path.exists(MODEL_PATH):
-            raise FileNotFoundError(f"Model checkpoint not found at {MODEL_PATH}(.zip)")
-        model = PPO.load(MODEL_PATH, device="cuda")
+    elif model_type == MODEL_TYPE.PPO:
+        model_path = get_model_path(model_type, override)
+        print(f"Model: PPO (loading from {model_path})")
+        model = PPO.load(model_path)
+
+    elif model_type == MODEL_TYPE.DDQN:
+        print("DDQN is currently unsupported.")
+        exit(-1)
+        # model_path = get_model_path(model_type)
+        # print(f"Model: DDQN (loading from {model_path})")
+        # model =
+    else:
+        print("Unknown model type")
+        exit(-1)
+
+    return model, configs
+
+
+def get_model_path(model_type, override=None):
+    if override:
+        return override
+
+    model_load_path = os.path.join(BASE_MODEL_PATH, model_type.value)
+    try:
+        files = [os.path.join(model_load_path, file) for file in os.listdir(model_load_path) if os.path.isfile(os.path.join(model_load_path, file))]
+
+        latest_file = max(files, key=os.path.getmtime)
+    except:
+        # Fallback on checkpoints
+        try:
+            old_load_path = model_load_path
+            model_load_path = os.path.join(model_load_path, "checkpoints")
+            files = [os.path.join(model_load_path, file) for file in os.listdir(model_load_path) if os.path.isfile(os.path.join(model_load_path, file))]
+
+            latest_file = max(files, key=os.path.getmtime)
+        except:
+            raise ValueError(f"No model found at {old_load_path} or {model_load_path}")
+
+    return latest_file
+
+
+if __name__ == "__main__":
+    base_config = load_base_config()
+    configs = build_configs(base_config)
+
+    # ─────────────────────────────────────────────────────────────
+    # Model Loading & Config Adjustments
+    # ─────────────────────────────────────────────────────────────
+
+    ############## SET THE MODEL TYPE ##############
+    model_type = MODEL_TYPE.PPO
+    ############## ------------------ ##############
+
+    model, configs = get_latest_model(model_type, configs)
+
+    # # You can specify a specific filename as an override if needs be
+    # model, configs = get_latest_model(model_type, configs, override="models/PPO_v2/vd_1_5.zip)
 
     # ─────────────────────────────────────────────────────────────
     # Run Evaluation
@@ -375,7 +379,7 @@ if __name__ == "__main__":
 
     print("=" * 70)
     print("Highway Model Benchmark Summary (50 eps/config, n_env=4)")
-    print(f"Model checkpoint: {MODEL_PATH}")
+    print(f"Model type: {model_type}")
     print("=" * 70)
     for label, avg_ret, coll_rate, avg_speed, avg_dist, avg_rms_accel, avg_rms_jerk, action_counts, total_actions in summary:
         print(f"{label}")

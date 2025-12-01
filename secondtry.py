@@ -24,7 +24,7 @@ def make_env(rank: int, env_config: dict):
 
 if __name__ == "__main__":
     # Training settings
-    SAVE_DIR = "highway_second_try"
+    SAVE_DIR = "models/DQN"
     N_ENV = 16
 
     # Resume settings (set to None to start from scratch)

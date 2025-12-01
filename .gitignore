@@ -2,3 +2,4 @@
 /venv/
 /models/PPO/checkpoints/
 /tensorboard/
+/models/PPO_v2/checkpoints/
