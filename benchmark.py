@@ -19,11 +19,14 @@ import json
 import os
 from typing import Dict, List, Tuple
 
+from doubledqntrain import QNetwork # import the Qnetwork for DDQN 
+
 from enum import Enum
 
 import gymnasium as gym
 import highway_env  # noqa: F401 (register env)
 import numpy as np
+import torch  
 from stable_baselines3 import DQN
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import SubprocVecEnv
@@ -58,6 +61,23 @@ ACTION_NAMES = {
 # ─────────────────────────────────────────────────────────────
 # Helpers
 # ─────────────────────────────────────────────────────────────
+
+
+class DDQNWrapper:
+    def __init__(self, model, device):
+        self.model = model
+        self.device = device
+
+    def predict(self, obs, deterministic=True):
+        # Flatten observation: (N_ENVS, V, F) -> (N_ENVS, V*F)
+        # This is required because QNetwork expects a flat input vector
+        obs_flat = obs.reshape(obs.shape[0], -1) 
+        
+        t_obs = torch.as_tensor(obs_flat, device=self.device, dtype=torch.float32)
+        with torch.no_grad():
+            return self.model(t_obs).argmax(dim=1).cpu().numpy(), None
+
+
 def load_base_config() -> Dict:
     with open(BASE_CONFIG_PATH, "r") as f:
         return json.load(f)
@@ -317,11 +337,27 @@ def get_latest_model(model_type, configs, override=None):
         model = PPO.load(model_path)
 
     elif model_type == MODEL_TYPE.DDQN:
-        print("DDQN is currently unsupported.")
-        exit(-1)
-        # model_path = get_model_path(model_type)
-        # print(f"Model: DDQN (loading from {model_path})")
-        # model =
+        # Minimal loading logic for DDQN
+        path = override if override else get_model_path(model_type)
+        if os.path.isdir(path): path = os.path.join(path, "policy_net.pth")
+        
+        print(f"Model: DDQN (loading from {path})")
+        
+        # 1. Get dims from dummy env
+        dummy = gym.make("highway-fast-v0", config=load_base_config())
+        obs, _ = dummy.reset()
+        dims = (obs.flatten().shape[0], dummy.action_space.n)
+        dummy.close()
+
+        # 2. Load model
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        net = QNetwork(*dims).to(device)
+        net.load_state_dict(torch.load(path, map_location=device))
+        net.eval()
+        
+        # 3. Wrap
+        model = DDQNWrapper(net, device)
+
     else:
         print("Unknown model type")
         exit(-1)
@@ -361,13 +397,14 @@ if __name__ == "__main__":
     # ─────────────────────────────────────────────────────────────
 
     ############## SET THE MODEL TYPE ##############
-    model_type = MODEL_TYPE.PPO
+    model_type = MODEL_TYPE.DDQN
     ############## ------------------ ##############
 
-    model, configs = get_latest_model(model_type, configs)
-
-    # # You can specify a specific filename as an override if needs be
-    # model, configs = get_latest_model(model_type, configs, override="models/PPO_v2/vd_1_5.zip)
+    # Point to your manually moved checkpoint folder
+    checkpoint_path = "models/DDQN_density2/checkpoint_10000000_steps"
+    
+    # Run evaluation with this specific path
+    model, configs = get_latest_model(model_type, configs, override=checkpoint_path)
 
     # ─────────────────────────────────────────────────────────────
     # Run Evaluation
