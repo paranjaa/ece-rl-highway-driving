@@ -2,9 +2,12 @@ import gymnasium as gym
 import numpy as np
 import json
 
+import torch
 from gymnasium import spaces
 import highway_env
 from enum import Enum
+
+import matplotlib.pyplot as plt
 from stable_baselines3 import PPO
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.vec_env import SubprocVecEnv
@@ -63,11 +66,11 @@ def run(config, filename, train=True, train_duration=50000):
         trained_model.save(filepath)
 
     else:
-        env = gym.make(
+        env = make_vec_env(
             "highway-fast-v0",
-            config=config,
-            render_mode="human",
-        )
+            n_envs=1,
+            vec_env_cls=SubprocVecEnv,
+            env_kwargs={"config": config})
         model = set_up_model(env)
 
         print(f"Loading trained model from: {filepath}")
@@ -77,19 +80,24 @@ def run(config, filename, train=True, train_duration=50000):
         test_seeds = [i for i in range(20)] # We want repeatable results so we set the seeds to known values
         rewards = []
         steps = []
+        pmfs = []
 
         for test_seed in test_seeds:
-            state, _ = env.reset(seed=test_seed)
+            model.env.seed(test_seed)
+            state = model.env.reset()
 
-            ended = False
-            truncated = False
+            dones = False
             num_steps = 0
             episode_reward = 0
+            pmf = []
 
-            while not ended and not truncated:
+            while not dones:
                 action, _ = trained_model.predict(state, deterministic=True)
-                #action = env.action_space.sample()
-                next_state, reward, ended, truncated, _ = env.step(action)
+
+                _state, _ = model.policy.obs_to_tensor(state)
+                pmf.append(model.policy.get_distribution(_state).distribution.probs.detach().numpy())
+
+                next_state, reward, dones, _ = model.env.step(action)
 
                 state = next_state
                 episode_reward += reward
@@ -100,6 +108,7 @@ def run(config, filename, train=True, train_duration=50000):
             print(f"Episode reward: {episode_reward} \t Steps: {num_steps}")
             rewards.append(episode_reward)
             steps.append(num_steps)
+            pmfs.append(pmf)
 
         env.close()
 
@@ -108,10 +117,20 @@ def run(config, filename, train=True, train_duration=50000):
         print(f"Average reward across {len(test_seeds)} trajectories: {np.mean(rewards)}")
         print(f"Average number of steps across {len(test_seeds)} trajectories: {np.mean(steps)}")
 
+        pmf = pmfs[2]
+        x = np.arange(len(pmf))
+        y = np.asarray(pmf).squeeze().transpose()
+        print(x.shape, y.shape)
+        plt.stackplot(x, *y, baseline="zero", labels=["LANE_LEFT", "IDLE", "LANE_RIGHT", "FASTER", "SLOWER"])
+        plt.legend()
+        plt.show()
+
+
+
 if __name__ == "__main__":
     ############ PARAMETERS ############
     vehicle_density = 2.0
-    train = True
+    train = False
     train_duration = 1e7
     ############ ========== ############
 
