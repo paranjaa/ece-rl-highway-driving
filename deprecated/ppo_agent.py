@@ -48,7 +48,7 @@ def run(config, filename, train=True, train_duration=50000):
         callbacks = [
             CheckpointCallback(
                 save_freq=5000,
-                save_path="./models/PPO/checkpoints/",
+                save_path="../models/PPO/checkpoints/",
                 name_prefix=filename,
                 save_replay_buffer=True,
                 save_vecnormalize=True,

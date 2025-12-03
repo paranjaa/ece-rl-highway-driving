@@ -12,7 +12,7 @@ from stable_baselines3.common.callbacks import ProgressBarCallback
 from stable_baselines3.common.callbacks import CheckpointCallback
 
 
-MODEL_SAVE_PATH = "./models/PPO_v2/{filename}"
+MODEL_SAVE_PATH = "models/PPO_density2/{filename}"
 
 def set_up_model(env):
     batch_size = 256
@@ -33,7 +33,7 @@ def set_up_model(env):
         env=env,
         seed=1508,
         verbose=1,
-        tensorboard_log="./tensorboard/PPO_v2/",
+        tensorboard_log="./tensorboard/PPO_density2/",
         device="cpu"
     )
 
@@ -49,7 +49,7 @@ def run(config, filename, train=True, train_duration=50000):
         callbacks = [
             CheckpointCallback(
                 save_freq=10000,
-                save_path="./models/PPO_v2/checkpoints/",
+                save_path="models/PPO_density2/checkpoints/",
                 name_prefix=filename,
                 save_replay_buffer=True,
                 save_vecnormalize=True,

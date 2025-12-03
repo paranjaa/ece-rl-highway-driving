@@ -1,0 +1,8 @@
+numpy==2.2.6
+gymnasium==1.2.1
+highway-env==1.10.2
+torch==2.9.0
+stable_baselines3==2.7.0
+matplotlib==3.10.7
+tqdm==4.67.1
+pygame==2.6.1
