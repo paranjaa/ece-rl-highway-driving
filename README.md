@@ -1,6 +1,13 @@
 # ece-1508-rl-highway-driving
 Repository for the Reinforcement Learning Course Project 
 
+## Setup
+Set up a virtual environment and install the requirements listed under `requirements.txt`.
+Additionally install the following:
+```shell
+pip install "gymnasium[other]"
+```
+
 ## Benchmarking trained models
 Trained models are listed under `./models/`. The base `highway-env` config is listed under `config.json`. 
 
