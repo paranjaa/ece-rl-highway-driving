@@ -14,9 +14,10 @@ Trained models are listed under `./models/`. The base `highway-env` config is li
 To benchmark a model, activate your virtual environment, install the requirements from `requirements.txt` and then run `benchmark.py`.
 ```text
 >>> python benchmark.py --help
-usage: benchmark.py [-h] [--use_density_2] [-f FILEPATH] {BASELINE,DQN,PPO,DDQN}
+usage: benchmark.py [-h] [--use_density {1,2}] [-f FILEPATH] {BASELINE,DQN,PPO,DDQN}
 
-Tests each trained model on various vehicle densities and extracts performance metrics.
+Tests each trained model on various vehicle densities and extracts performance metrics. By default, uses models
+trained with vehicle density 1.5.
 
 positional arguments:
   {BASELINE,DQN,PPO,DDQN}
@@ -24,21 +25,24 @@ positional arguments:
 
 options:
   -h, --help            show this help message and exit
-  --use_density_2       Whether to use a variant of the model that was trained with vehicle desnity 2. Note that this is not the vehicle density used for the benchmarking.
+  --use_density {1,2}   Specify to use a variant of the model that was trained with vehicle density 1 or 2. Note that
+                        this is not the vehicle density used for the benchmarking. Exclude this argument for the
+                        default training vehicle density of 1.5.
   -f FILEPATH, --filepath FILEPATH
-                        Specify a filepath to a trained model of the appropriate type. Omitting this will default to the latest trained model for that model type.
+                        Specify a filepath to a trained model of the appropriate type. Omitting this will default to
+                        the latest trained model for that model type.
 ```
 
 ## Example usage
 
 Sample input for running `benchmark.py` on DDQN with trained density 2:
 ```shell
-python benchmark.py DDQN --use_density_2
+python benchmark.py DDQN --use_density 2
 ```
 
 Sample output for running `benchmark.py` on DDQN with trained density 2:
 ```text
->>> python benchmark.py DDQN --use_density_2
+>>> python benchmark.py DDQN --use_density 2
 Model: DDQN (loading from models/DDQN_density2\policy_net.pth)
 ======================================================================
 Highway Model Benchmark Summary (50 eps/config, n_env=4)
