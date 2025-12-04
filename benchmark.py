@@ -312,7 +312,17 @@ def build_configs(base_cfg: Dict) -> List[Tuple[str, Dict]]:
     return configs
 
 
-def get_latest_model(model_type, configs, override=None, use_density_2=False):
+def get_latest_model(model_type, configs, override=None, use_density=None):
+    """
+    Tries to load the latest model of a specific model type using the provided config. Falls back on the last model
+    checkpoint if unsuccessful
+    :param model_type: The model type to load based on MODEL_TYPE
+    :param configs: The configs to use
+    :param override: Specify a filepath override for models outside the appropriate directory layout
+    :param use_density: Specify a specific trained model vehicle density to use (1 or 2). Omitting this term runs the
+                        default 1.5 density.
+    :return: A tuple containing the model object and potentially modified configs
+    """
     if model_type == MODEL_TYPE.BASELINE:
         print("Model: RuleBasedAgent")
         # Initialize RuleBasedAgent
@@ -328,18 +338,18 @@ def get_latest_model(model_type, configs, override=None, use_density_2=False):
                 cfg["observation"] = {"normalize": False}
 
     elif model_type == MODEL_TYPE.DQN:
-        model_path = get_model_path(model_type, override, use_density_2)
+        model_path = get_model_path(model_type, override, use_density)
         print(f"Model: DQN (loading from {model_path})")
         model = DQN.load(model_path, device="cuda")
 
     elif model_type == MODEL_TYPE.PPO:
-        model_path = get_model_path(model_type, override, use_density_2)
+        model_path = get_model_path(model_type, override, use_density)
         print(f"Model: PPO (loading from {model_path})")
         model = PPO.load(model_path)
 
     elif model_type == MODEL_TYPE.DDQN:
         # Minimal loading logic for DDQN
-        model_path = get_model_path(model_type, override, use_density_2)
+        model_path = get_model_path(model_type, override, use_density)
         if os.path.isdir(model_path):
             model_path = os.path.join(model_path, "policy_net.pth")
         
@@ -367,13 +377,27 @@ def get_latest_model(model_type, configs, override=None, use_density_2=False):
     return model, configs
 
 
-def get_model_path(model_type, override=None, use_density_2=False):
+def get_model_path(model_type, override=None, use_density=None):
+    """
+    Attempts to determine the model path given a model type and a density
+    :param model_type:
+    :param override:
+    :param use_density_2:
+    :return:
+    """
     if override:
         return override
 
     model_load_path = os.path.join(BASE_MODEL_PATH, model_type.value)
-    if use_density_2:
-        model_load_path += "_density2"
+    match use_density:
+        case 1:
+            model_load_path += "_density1"
+        case 2:
+            model_load_path += "_density2"
+        case _:
+            # No need to do anything else for density 1.5
+            # Any other value also does not make sense so fallback on 1.5 density
+            pass
 
     if model_type == MODEL_TYPE.DDQN:
         # DDQN uses a different method of loading the model. Simply return the directory
@@ -400,7 +424,7 @@ def get_model_path(model_type, override=None, use_density_2=False):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="""
-        Tests each trained model on various vehicle densities and extracts performance metrics.
+        Tests each trained model on various vehicle densities and extracts performance metrics. By default, uses models trained with vehicle density 1.5.
         """
     )
     parser.add_argument(
@@ -410,9 +434,10 @@ if __name__ == "__main__":
         help="The model type to use as the RL agent for benchmarking."
     )
     parser.add_argument(
-        "--use_density_2",
-        action="store_true",
-        help="Whether to use a variant of the model that was trained with vehicle desnity 2. Note that this is not the vehicle density used for the benchmarking."
+        "--use_density",
+        type=int,
+        choices=[1,2],
+        help="Specify to use a variant of the model that was trained with vehicle density 1 or 2. Note that this is not the vehicle density used for the benchmarking. Exclude this argument for the default training vehicle density of 1.5."
     )
     parser.add_argument(
         "-f",
@@ -422,13 +447,13 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     filepath = args.filepath
-    use_density_2 = args.use_density_2
+    use_density = args.use_density
 
     match args.model.lower():
         case "baseline":
             model_type = MODEL_TYPE.BASELINE
-            if use_density_2:
-                print("BASELINE model is unaffected by vehicle density at model-training time. Ignoring --use_density_2 flag.")
+            if use_density:
+                print("BASELINE model is unaffected by vehicle density at model-training time. Ignoring --use_density flag.")
         case "dqn":
             model_type = MODEL_TYPE.DQN
         case "ddqn":
@@ -453,7 +478,7 @@ if __name__ == "__main__":
     ############## ------------------ ##############
     
     # Run evaluation with this specific path
-    model, configs = get_latest_model(model_type, configs, override=filepath, use_density_2=use_density_2)
+    model, configs = get_latest_model(model_type, configs, override=filepath, use_density=use_density)
 
     # ─────────────────────────────────────────────────────────────
     # Run Evaluation
