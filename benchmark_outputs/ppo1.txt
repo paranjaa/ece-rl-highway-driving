@@ -1,0 +1,89 @@
+Model: PPO (loading from models/PPO_density1/vd_1_0_trial_1.zip)
+======================================================================
+Highway Model Benchmark Summary (50 eps/config, n_env=4)
+Model type: MODEL_TYPE.PPO
+======================================================================
+density=1.0, duration=40s
+  Avg Reward     :   60.638
+  Collision Rate :    14.00%
+  Avg Speed      :   24.451 m/s
+  Avg Distance   :  917.873 m
+  RMS Accel      :    2.203 m/s^2
+  RMS Jerk      :    8.118 m/s^3
+  Action distribution (total actions = 5760):
+      [0] LANE_LEFT :  23.65% (1362 actions)
+      [1] IDLE      :   8.49% (489 actions)
+      [2] LANE_RIGHT:  17.66% (1017 actions)
+      [3] FASTER    :  21.53% (1240 actions)
+      [4] SLOWER    :  28.68% (1652 actions)
+------------------------------------------------------------
+density=1.5, duration=40s
+  Avg Reward     :   23.942
+  Collision Rate :    70.00%
+  Avg Speed      :   24.796 m/s
+  Avg Distance   :  561.449 m
+  RMS Accel      :    2.267 m/s^2
+  RMS Jerk      :    6.070 m/s^3
+  Action distribution (total actions = 3652):
+      [0] LANE_LEFT :  24.45% (893 actions)
+      [1] IDLE      :  16.18% (591 actions)
+      [2] LANE_RIGHT:   8.19% (299 actions)
+      [3] FASTER    :  15.09% (551 actions)
+      [4] SLOWER    :  36.09% (1318 actions)
+------------------------------------------------------------
+density=2.0, duration=40s
+  Avg Reward     :    2.268
+  Collision Rate :    92.00%
+  Avg Speed      :   25.521 m/s
+  Avg Distance   :  307.476 m
+  RMS Accel      :    2.346 m/s^2
+  RMS Jerk      :    5.935 m/s^3
+  Action distribution (total actions = 1952):
+      [0] LANE_LEFT :  32.22% (629 actions)
+      [1] IDLE      :  11.58% (226 actions)
+      [2] LANE_RIGHT:   5.33% (104 actions)
+      [3] FASTER    :  13.68% (267 actions)
+      [4] SLOWER    :  37.19% (726 actions)
+------------------------------------------------------------
+density=1.0, duration=20s
+  Avg Reward     :   32.745
+  Collision Rate :    16.00%
+  Avg Speed      :   26.133 m/s
+  Avg Distance   :  507.990 m
+  RMS Accel      :    2.183 m/s^2
+  RMS Jerk      :    6.842 m/s^3
+  Action distribution (total actions = 3040):
+      [0] LANE_LEFT :  28.16% (856 actions)
+      [1] IDLE      :   7.66% (233 actions)
+      [2] LANE_RIGHT:  16.58% (504 actions)
+      [3] FASTER    :  25.62% (779 actions)
+      [4] SLOWER    :  21.97% (668 actions)
+------------------------------------------------------------
+density=1.5, duration=20s
+  Avg Reward     :   11.327
+  Collision Rate :    64.00%
+  Avg Speed      :   24.776 m/s
+  Avg Distance   :  352.965 m
+  RMS Accel      :    2.306 m/s^2
+  RMS Jerk      :    6.085 m/s^3
+  Action distribution (total actions = 2220):
+      [0] LANE_LEFT :  23.47% (521 actions)
+      [1] IDLE      :  10.86% (241 actions)
+      [2] LANE_RIGHT:   9.86% (219 actions)
+      [3] FASTER    :  17.34% (385 actions)
+      [4] SLOWER    :  38.47% (854 actions)
+------------------------------------------------------------
+density=2.0, duration=20s
+  Avg Reward     :   -3.352
+  Collision Rate :    94.00%
+  Avg Speed      :   25.560 m/s
+  Avg Distance   :  222.554 m
+  RMS Accel      :    2.540 m/s^2
+  RMS Jerk      :    6.630 m/s^3
+  Action distribution (total actions = 1388):
+      [0] LANE_LEFT :  24.57% (341 actions)
+      [1] IDLE      :  11.02% (153 actions)
+      [2] LANE_RIGHT:   8.43% (117 actions)
+      [3] FASTER    :  19.96% (277 actions)
+      [4] SLOWER    :  36.02% (500 actions)
+------------------------------------------------------------
