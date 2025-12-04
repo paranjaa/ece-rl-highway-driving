@@ -11,7 +11,7 @@ without rendering, and report:
     Average ego speed (m/s) averaged over each episode
     TODO: Minimum TTC (time to collision): The minimum time to collision (in s) to the nearest vehicle assuming all vehicles continue at constant velocity
     RMS Acceleration : Root Mean Square Acceleration (m/s^2)
-    TODO:RMS Jerk 
+    RMS Jerk 
 """
 
 import copy
