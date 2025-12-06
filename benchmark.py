@@ -3,7 +3,7 @@ benchmark.py
 
 Evaluate the trained SB3 DQN policy across multiple highway-env configs.
 The model is loaded from a checkpoint (you have to specify the directory).
-For each config we run 50 evaluation episodes using a 4-env SubprocVecEnv
+For each config we run 100 evaluation episodes using a 4-env SubprocVecEnv
 without rendering, and report:
     Average distance covered over episodes (in m)
     Average episode reward
@@ -49,7 +49,7 @@ class MODEL_TYPE(Enum):
     PPO = "PPO"
 
 N_ENVS = 4
-EPISODES_PER_CONFIG = 50
+EPISODES_PER_CONFIG = 100
 
 ACTION_NAMES = {
     0: "LANE_LEFT",
@@ -110,7 +110,23 @@ def maybe_get_speed(info: Dict, obs_chunk) -> float:
     return 0.0
 
 
-def evaluate_config(model, run_config: Dict, label: str) -> Tuple[float, float, float, float, float, np.ndarray, int]:
+def mean_and_stderr(values: List[float]) -> Tuple[float, float]:
+    """
+    Calculate mean and standard error of a list of values.
+    Returns (mean, standard_error).
+    """
+    arr = np.asarray(values, dtype=np.float32)
+    if arr.size == 0:
+        return 0.0, 0.0
+    mean = float(np.mean(arr))
+    if arr.size == 1:
+        return mean, 0.0
+    # Use ddof=1 for unbiased sample standard deviation
+    stderr = float(np.std(arr, ddof=1) / np.sqrt(arr.size))
+    return mean, stderr
+
+
+def evaluate_config(model, run_config: Dict, label: str) -> Tuple[float, float, float, float, float, float, float, float, float, np.ndarray, int]:
     env = make_vec_env(run_config)
 
     # Determine dt (time step duration)
@@ -277,15 +293,13 @@ def evaluate_config(model, run_config: Dict, label: str) -> Tuple[float, float, 
 
     avg_return = float(np.mean(ep_returns))
     collision_rate = float(np.mean(ep_collisions) * 100.0)
-    avg_speed = float(np.mean(ep_avg_speeds))
-    avg_distance = float(np.mean(ep_distances)) 
+    avg_speed, speed_se = mean_and_stderr(ep_avg_speeds)
+    avg_distance, distance_se = mean_and_stderr(ep_distances)
     avg_rms_accel = float(np.mean(ep_rms_accels)) 
-    #adding a counter in for jerk
-    avg_rms_jerk = float(np.mean(ep_rms_jerks)) 
+    avg_rms_jerk, jerk_se = mean_and_stderr(ep_rms_jerks)
     total_actions = action_counts.sum()
     
-    #forgot to pass the counter in for jerk as well
-    return avg_return, collision_rate, avg_speed, avg_distance, avg_rms_accel, avg_rms_jerk, action_counts, total_actions
+    return avg_return, collision_rate, avg_speed, speed_se, avg_distance, distance_se, avg_rms_accel, avg_rms_jerk, jerk_se, action_counts, total_actions
 
 
 def build_configs(base_cfg: Dict) -> List[Tuple[str, Dict]]:
@@ -489,17 +503,17 @@ if __name__ == "__main__":
         summary.append((label, *metrics))
 
     print("=" * 70)
-    print("Highway Model Benchmark Summary (50 eps/config, n_env=4)")
+    print("Highway Model Benchmark Summary (100 eps/config, n_env=4)")
     print(f"Model type: {model_type}")
     print("=" * 70)
-    for label, avg_ret, coll_rate, avg_speed, avg_dist, avg_rms_accel, avg_rms_jerk, action_counts, total_actions in summary:
+    for label, avg_ret, coll_rate, avg_speed, speed_se, avg_dist, dist_se, avg_rms_accel, avg_rms_jerk, jerk_se, action_counts, total_actions in summary:
         print(f"{label}")
         print(f"  Avg Reward     : {avg_ret:8.3f}")
         print(f"  Collision Rate : {coll_rate:8.2f}%")
-        print(f"  Avg Speed      : {avg_speed:8.3f} m/s")
-        print(f"  Avg Distance   : {avg_dist:8.3f} m") 
+        print(f"  Avg Speed      : {avg_speed:8.3f} ± {speed_se:6.3f} m/s")
+        print(f"  Avg Distance   : {avg_dist:8.3f} ± {dist_se:6.3f} m")
         print(f"  RMS Accel      : {avg_rms_accel:8.3f} m/s^2")
-        print(f"  RMS Jerk      : {avg_rms_jerk:8.3f} m/s^3")
+        print(f"  RMS Jerk       : {avg_rms_jerk:8.3f} ± {jerk_se:6.3f} m/s^3")
         print(f"  Action distribution (total actions = {total_actions}):")
         for idx, count in enumerate(action_counts):
             name = ACTION_NAMES.get(idx, f"A{idx}")

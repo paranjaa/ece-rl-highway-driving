@@ -261,7 +261,7 @@ if __name__ == "__main__":
     # SETTINGS - Change these to configure playback
     # ═══════════════════════════════════════════════════════════
     USE_DDQN = True               # True = Double DQN, False = SB3 DQN
-    CHECKPOINT = 10000000         # Checkpoint timestep (None = use final model)
+    CHECKPOINT = None             # Checkpoint timestep (None = use final model)
     NUM_EPISODES = 5              # Number of episodes to play
     
     # Model directory (where checkpoints and config.json are stored)
@@ -303,7 +303,7 @@ if __name__ == "__main__":
         if CHECKPOINT:
             model_path = f"{MODEL_DIR}/checkpoints/dqn_model_{CHECKPOINT}_steps"
         else:
-            model_path = f"{MODEL_DIR}/model"
+            model_path = f"{MODEL_DIR}"
         
         if not os.path.exists(model_path + ".zip") and not os.path.exists(model_path):
             print(f"Error: Model not found at {model_path}")

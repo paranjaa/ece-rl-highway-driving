@@ -22,14 +22,14 @@ def set_up_model(env):
         policy="MlpPolicy",
         # default is 2 layers of 64 width
         policy_kwargs=dict(net_arch=[256, 256]),
+        # Potentially different architectures for policy and value networks
+        # policy_kwargs=dict(dict(pi=[256, 256], vf=[256, 256])),
         batch_size=batch_size,
         n_steps=batch_size * cpu_cores,
         n_epochs=5,  # Default 10
         learning_rate=3e-4,
         gamma=0.8,  # Originally 0.8
         gae_lambda=0.95,  # Default 0.95
-        # Potentially different architectures for policy and value networks
-        #policy_kwargs=dict(dict(pi=[256, 256], vf=[256, 256])),
         env=env,
         seed=1508,
         verbose=1,
@@ -41,6 +41,15 @@ def set_up_model(env):
 
 
 def run(config, filename, train=True, train_duration=50000):
+    """
+    Trains a PPO model and saves it to a location or loads a specified PPO model and runs it
+    :param config: The configuration to use for the highway-env environment
+    :param filename: The filename to save the model to or load the model from
+    :param train: Whether to train the model
+    :param train_duration: If training, the number of steps to train the model for
+    :return: None
+    """
+
     filepath = MODEL_SAVE_PATH.format(filename=filename)
 
     if train:
