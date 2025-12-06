@@ -20,7 +20,7 @@ import os
 import argparse
 from typing import Dict, List, Tuple
 
-from doubledqntrain import QNetwork # import the Qnetwork for DDQN 
+from ddqn_agent import QNetwork # import the Qnetwork for DDQN
 
 from enum import Enum
 
