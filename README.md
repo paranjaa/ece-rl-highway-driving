@@ -164,4 +164,4 @@ python playDQN.py --ddqn --checkpoint 600000
 
 ### Demo
 
-<video src="demo.mp4" controls width="640"></video>  
+[![Demo Video](demo_thumbnail.png)](demo.mp4)  
