@@ -145,4 +145,23 @@ Run the appropriate `_agent.py` file to train a RL-agent of that model type. Not
     - `ppo_agent_v2.py` 
 
 ## Visualizing Models
-`playDQN.py` offers a way to visualize the model playing a trajectory of `highway-env`.  
+`playDQN.py` offers a way to visualize trained models playing trajectories in `highway-env`. The script supports both Stable-Baselines3 DQN models and custom Double DQN implementations.
+
+### Usage
+
+To visualize a trained model:
+
+```shell
+# Play SB3 DQN model
+python playDQN.py
+
+# Play Double DQN model (final checkpoint)
+python playDQN.py --ddqn
+
+# Play Double DQN from a specific checkpoint
+python playDQN.py --ddqn --checkpoint 600000
+```
+
+### Demo
+
+<video src="demo.mp4" controls width="640"></video>  
