@@ -1,18 +1,25 @@
-#!/bin/bash  
-echo ""
 
+
+#!/bin/bash  
+
+#benchmark_parser.sh is takes the output from benchmark.py
+#and uses awk and sed to filter out the numbers for each metric, for use in the spreadsheet
+
+#to use it, call benchmark.py and use > to put the inputs into a file like "ddqn_1.txt"
+#then change the variables here to match that, then an output fiel
 INPUT_FILE="/benchmark_outputs/ddqn_1.txt"
 OUTPUT_FILE="benchmark_outputs/ddqn_1_parsed.txt"
 
-echo "taking from ${INPUT_FILE}, to ${OUTPUT_FILE}"
+echo "taking from ${INPUT_FILE}, into ${OUTPUT_FILE}"
 
-#clear output file first:
-> $OUTPUT_FILE
+
+#with extra time, would have used a loop, and structured outputs like csv, but this was fast enough for only 10 runs
 
 echo "Test Density" >> $OUTPUT_FILE
 grep "density=" $INPUT_FILE | awk -F '=' '{print $2}' | awk '{print $1}' | sed 's/,//g' >> $OUTPUT_FILE
 echo "" >> $OUTPUT_FILE 
-#
+
+
 echo "Duration" >> $OUTPUT_FILE
 grep "duration=" $INPUT_FILE | awk -F ', ' '{print $2}' | awk -F '=' '{print $2}' | sed 's/s//; s/,//g' >> $OUTPUT_FILE
 echo "" >> $OUTPUT_FILE 
