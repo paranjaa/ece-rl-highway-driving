@@ -164,4 +164,4 @@ python playDQN.py --ddqn --checkpoint 600000
 
 ### Demo
 
-[![Demo Video](demo_thumbnail.png)](demo.mp4)  
+![Demo Video](demo.gif)  
