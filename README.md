@@ -1,12 +1,48 @@
 # ece-1508-rl-highway-driving
-Repository for the Reinforcement Learning Course Project 
+
+## Overview
+This repository implements and compares Deep Reinforcement Learning algorithms for autonomous highway driving using the `highway-env` simulator. The project evaluates three RL algorithms: Deep Q-Network (DQN), Double Deep Q-Network (DDQN), and Proximal Policy Optimization (PPO), alongside a rule-based baseline agent. Models are trained and evaluated across different traffic densities (1.0, 1.5, and 2.0 vehicles per lane) to assess robustness and performance in varying traffic conditions.
 
 ## Setup
-Set up a virtual environment and install the requirements listed under `requirements.txt`.
-Additionally install the following:
-```shell
-pip install "gymnasium[other]"
-```
+1. Create and activate a virtual environment:
+   ```shell
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   ```
+
+2. Install the required dependencies from `requirements.txt`:
+   ```shell
+   pip install -r requirements.txt
+   ```
+
+3. Additionally install the gymnasium extras package:
+   ```shell
+   pip install "gymnasium[other]"
+   ```
+
+This will install all necessary packages including PyTorch, Stable-Baselines3, highway-env, and other dependencies required for training and evaluation.
+
+## Project Structure
+- `config.json` - Environment configuration file (traffic density, rewards, episode duration, etc.)
+- `benchmark.py` - Evaluation script for benchmarking trained models across multiple configurations
+- `dqn_agent.py` - DQN training script using Stable-Baselines3
+- `ddqn_agent.py` - Double DQN training script (custom PyTorch implementation)
+- `ppo_agent_v2.py` - PPO training script using Stable-Baselines3
+- `baseline/baseline.py` - Rule-based baseline agent implementation
+- `playDQN.py` - Visualization tool for running and displaying trained models
+- `models/` - Directory containing trained model checkpoints organized by algorithm and density
+- `doubledqn_*/` - DDQN training outputs (logs, checkpoints, training_logs.npz) for different densities
+
+## Configuration
+The `config.json` file controls the highway environment settings used during training and evaluation. Key parameters include:
+- `vehicles_density`: Traffic density (1.0 = light, 1.5 = moderate, 2.0 = heavy traffic)
+- `collision_reward`: Penalty for collisions (typically -20.0)
+- `high_speed_reward`: Reward coefficient for maintaining high speed
+- `duration`: Episode length in seconds (default: 40)
+- `policy_frequency`: Control frequency in Hz (default: 3)
+- `simulation_frequency`: Physics simulation frequency in Hz (default: 5)
+
+Modify these parameters to change the training environment characteristics. All training scripts load this configuration file, though individual scripts may override specific parameters.
 
 ## Benchmarking trained models
 Trained models are listed under `./models/`. The base `highway-env` config is listed under `config.json`. 
@@ -135,14 +171,56 @@ density=2.0, duration=20s
 ```
 
 ## Training Models
-Run the appropriate `_agent.py` file to train a RL-agent of that model type. Note that `baseline.py` does not need to be trained but its behaviour can be altered through that file if needed. Model hyperparameters can only be changed by editing their configuration directly in these files. Environment configuration is loaded from `config.json`
+To train a model, run the appropriate training script. Model hyperparameters can be modified by editing the configuration variables directly in each script file. Environment configuration is loaded from `config.json`, though scripts may override specific parameters.
 
--  DQN:
-    - `dqn_agent.py`
--  DDQN
-    - `ddqn_agent.py`
--  PPO
-    - `ppo_agent_v2.py` 
+### DQN (`dqn_agent.py`)
+Uses Stable-Baselines3 DQN implementation. Key hyperparameters (editable in the script):
+- Learning rate: `5e-4`
+- Buffer size: `150_000`
+- Batch size: `256`
+- Gamma: `0.80`
+- Exploration: Linear decay from `0.8` to `0.08` over 5M steps
+- Parallel environments: `16`
+- Total timesteps: `10_000_000`
+
+Models are saved to `models/DQN/` with checkpoints saved every 100k steps.
+
+### DDQN (`ddqn_agent.py`)
+Custom PyTorch implementation of Double DQN. Key hyperparameters (editable in the script):
+- Learning rate: `5e-4`
+- Buffer size: `150_000`
+- Batch size: `256`
+- Gamma: `0.99`
+- Target network update interval: `1000` steps
+- Exploration: Linear decay from `0.8` to `0.08` over 5M steps
+- Parallel environments: `9`
+- Total timesteps: `10_000_000`
+
+Training density can be set via `CONFIG_OVERRIDES` dictionary. Models are saved to directories like `doubledqn_density1/`, `doubledqn_density2/`, etc., with training logs saved as `training_logs.npz`.
+
+### PPO (`ppo_agent_v2.py`)
+Uses Stable-Baselines3 PPO implementation. Key hyperparameters (editable in the script):
+- Learning rate: `3e-4`
+- Batch size: `256`
+- Network architecture: `[256, 256]`
+- Gamma: `0.8`
+- GAE lambda: `0.95`
+- Clip range: `0.2`
+- Entropy coefficient: `0.01`
+- Parallel environments: `8`
+- Total timesteps: `10_000_000`
+
+Models are saved to `models/PPO_density*/` directories.
+
+## Baseline Agent
+The rule-based baseline agent (`baseline/baseline.py`) implements a simple driving policy that maintains target speed, performs lane changes when safe, and slows down when following slower vehicles. The agent does not require training and can be benchmarked directly.
+
+To benchmark the baseline agent:
+```shell
+python benchmark.py BASELINE
+```
+
+The baseline agent behavior can be customized by modifying parameters in `baseline/baseline.py` (target speed, headway thresholds, etc.). 
 
 ## Visualizing Models
 `playDQN.py` offers a way to visualize trained models playing trajectories in `highway-env`. The script supports both Stable-Baselines3 DQN models and custom Double DQN implementations.
@@ -159,7 +237,7 @@ python playDQN.py
 python playDQN.py --ddqn
 
 # Play Double DQN from a specific checkpoint
-python playDQN.py --ddqn --checkpoint 600000
+python playDQN.py --ddqn --checkpoint 10000000
 ```
 
 ### Demo
